@@ -6,10 +6,7 @@
 #include <math.h>
 #include <errno.h>
 
-// Define M_PI if not available in embedded environment
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#define RGBLED_WIDGET_PI_F 3.14159265358979323846f
 
 #include <zmk/battery.h>
 #include <zmk/ble.h>
@@ -403,7 +400,7 @@ static void update_led_animation(uint8_t led_index) {
             float phase = (float)cycle_time / anim->period_ms;
             
             // Create sine wave for smooth pulsing
-            float intensity = (sinf(phase * 2 * M_PI) + 1.0f) / 2.0f;
+            float intensity = (sinf(phase * 2.0f * RGBLED_WIDGET_PI_F) + 1.0f) / 2.0f;
             
             struct led_rgb start_rgb, result_rgb;
             color_index_to_rgb(anim->start_color, &start_rgb);
@@ -499,19 +496,26 @@ static int indicate_connectivity_ws2812(void) {
     pattern.type = ANIM_STATIC;
     
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    switch (zmk_endpoints_selected().transport) {
+    switch (zmk_endpoint_get_selected().transport) {
     case ZMK_TRANSPORT_USB:
 #if IS_ENABLED(CONFIG_RGBLED_WIDGET_CONN_SHOW_USB)
         color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_USB;
         LOG_INF("Enhanced USB connection indication");
         break;
 #endif
-    default: // ZMK_TRANSPORT_BLE
+    case ZMK_TRANSPORT_BLE:
 #if IS_ENABLED(CONFIG_ZMK_BLE)
         if (zmk_ble_active_profile_is_connected()) {
             color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_CONNECTED;
             LOG_INF("BLE connected indication");
-        } else if (zmk_ble_active_profile_is_open()) {
+            break;
+        }
+#endif
+        __fallthrough;
+    default: // ZMK_TRANSPORT_NONE, or USB when USB indication is disabled
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+        if (zmk_endpoint_get_preferred_transport() != ZMK_TRANSPORT_NONE &&
+            zmk_ble_active_profile_is_open()) {
             color_idx = CONFIG_RGBLED_WIDGET_CONN_COLOR_ADVERTISING;
             pattern.type = ANIM_PULSE;
             pattern.period_ms = 2000;

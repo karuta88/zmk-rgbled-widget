@@ -18,7 +18,7 @@
 void indicate_battery(void);
 #endif
 
-#if IS_ENABLED(CONFIG_ZMK_BLE)
+#if IS_ENABLED(CONFIG_ZMK_USB) || IS_ENABLED(CONFIG_ZMK_BLE)
 void indicate_connectivity(void);
 #endif
 

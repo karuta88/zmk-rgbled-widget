@@ -26,7 +26,7 @@ if RGBLED_WIDGET_WS2812
 config LED_STRIP
     default y
     
-config WS2812_STRIP
+config WS2812_STRIP_SPI
     default y
 
 config RGBLED_WIDGET_LED_COUNT
