@@ -157,6 +157,7 @@ static bool initialized = false;
 
 // track current color for persistent indicators (layer color)
 uint8_t led_current_color = 0;
+uint8_t led_layer_color = 0;
 
 // low-level method to control the LED
 #if IS_ENABLED(CONFIG_RGBLED_WIDGET_WS2812)
@@ -450,6 +451,8 @@ static int indicate_battery_enhanced(void) {
     uint8_t battery_level = zmk_battery_state_of_charge();
     uint8_t color_idx = 0;
     struct animation_state pattern = {0};
+    uint16_t display_ms = 0;
+    bool persistent = true;
     
     if (battery_level == 0) {
         color_idx = CONFIG_RGBLED_WIDGET_BATTERY_COLOR_MISSING;
@@ -478,8 +481,13 @@ static int indicate_battery_enhanced(void) {
     
     LOG_INF("Enhanced battery indication: level %d%%, color %s, pattern %d", 
             battery_level, color_names[color_idx], pattern.type);
+
+#if SHOW_LAYER_COLORS && (CONFIG_RGBLED_WIDGET_BATTERY_LED_INDEX == CONFIG_RGBLED_WIDGET_LAYER_LED_INDEX)
+    display_ms = CONFIG_RGBLED_WIDGET_BATTERY_BLINK_MS;
+    persistent = false;
+#endif
     
-    int ret = set_status_led(STATUS_BATTERY, color_idx, 0, true);
+    int ret = set_status_led(STATUS_BATTERY, color_idx, display_ms, persistent);
     
     // Apply pattern if using spatial mapping
     uint8_t battery_led = get_primary_led_for_status(STATUS_BATTERY);
@@ -811,10 +819,24 @@ static void return_shared_led(uint8_t led_index) {
     struct led_state *state = &led_states[led_index];
     
     if (state->is_shared) {
-        ws2812_set_led(led_index, state->base_color);
+#if SHOW_LAYER_COLORS
+        if (led_index == CONFIG_RGBLED_WIDGET_LAYER_LED_INDEX) {
+            ws2812_set_led(led_index, led_layer_color);
+            state->status_type = STATUS_LAYER;
+            state->priority = PRIORITY_LAYER_CHANGE;
+            state->is_persistent = true;
+        } else
+#endif
+        {
+            ws2812_set_led(led_index, state->base_color);
+            state->priority = PRIORITY_AMBIENT;
+        }
+
         state->is_shared = false;
-        state->priority = PRIORITY_AMBIENT;
         state->share_end_time = 0;
+#if IS_ENABLED(CONFIG_RGBLED_WIDGET_ANIMATIONS)
+        state->anim.type = ANIM_STATIC;
+#endif
         
         LOG_DBG("Returned shared LED %d to base color %d", led_index, state->base_color);
     }
@@ -1081,7 +1103,6 @@ ZMK_LISTENER(led_battery_listener, led_battery_listener_cb);
 ZMK_SUBSCRIPTION(led_battery_listener, zmk_battery_state_changed);
 #endif // IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
 
-uint8_t led_layer_color = 0;
 #if SHOW_LAYER_COLORS
 void update_layer_color(void) {
     uint8_t index = zmk_keymap_highest_layer_active();
